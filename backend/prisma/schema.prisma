@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { PASSENGER RIDER ADMIN }
+enum TripStatus { REQUESTED ACCEPTED ARRIVED STARTED COMPLETED CANCELED }
+enum ServiceType { RIDE DELIVERY SHOPPING FOOD RENT MAINTENANCE }
+
+enum VoucherCategory { SHOPPING FOOD ALL }
+
+model User {
+  id             String   @id @default(cuid())
+  phone          String   @unique
+  email          String?
+  name           String?
+  photoUrl       String?
+  role           Role
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  riderProfile   RiderProfile?
+  passengerTrips Trip[]   @relation("PassengerTrips")
+  riderTrips     Trip[]   @relation("RiderTrips")
+  ratingsGiven   Rating[] @relation("RatingsGiven")
+  ratingsRecv    Rating[] @relation("RatingsRecv")
+  credits        Credit[]
+  vouchers       Voucher[]
+}
+
+model RiderProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  verificationState String
+  availability      Boolean  @default(false)
+  ratingAvg         Float    @default(5)
+  completedRides    Int      @default(0)
+  level             Int      @default(1)
+  serviceToggles    Json
+  user              User     @relation(fields: [userId], references: [id])
+  bikes             Bike[]
+}
+
+model Bike {
+  id           String   @id @default(cuid())
+  riderId      String
+  brand        String
+  model        String
+  plateNumber  String   @unique
+  bikeType     String
+  year         Int
+  rider        RiderProfile @relation(fields: [riderId], references: [id])
+}
+
+model PricingTier {
+  id          String @id @default(cuid())
+  key         String @unique
+  baseFare    Decimal
+  perKm       Decimal
+  perMin      Decimal
+  minimumFare Decimal
+  cancelFee   Decimal
+  rules       PricingRule[]
+}
+
+model PricingRule {
+  id             String @id @default(cuid())
+  city           String
+  zone           String
+  surgeMultiplier Decimal @default(1)
+  active         Boolean @default(true)
+  tierId         String
+  tier           PricingTier @relation(fields: [tierId], references: [id])
+}
+
+model Trip {
+  id             String @id @default(cuid())
+  passengerId    String
+  riderId        String?
+  serviceType    ServiceType
+  status         TripStatus
+  pickupLat      Float
+  pickupLng      Float
+  dropoffLat     Float
+  dropoffLng     Float
+  fareEstimate   Decimal?
+  fareFinal      Decimal?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  passenger      User @relation("PassengerTrips", fields: [passengerId], references: [id])
+  rider          User? @relation("RiderTrips", fields: [riderId], references: [id])
+  events         TripEvent[]
+  locations      TripLocation[]
+  rating         Rating?
+}
+
+model TripEvent {
+  id        String   @id @default(cuid())
+  tripId    String
+  type      String
+  payload   Json?
+  createdAt DateTime @default(now())
+  trip      Trip @relation(fields: [tripId], references: [id])
+}
+
+model TripLocation {
+  id        String   @id @default(cuid())
+  tripId    String
+  riderId   String
+  lat       Float
+  lng       Float
+  heading   Float?
+  speedKph  Float?
+  createdAt DateTime @default(now())
+  trip      Trip @relation(fields: [tripId], references: [id])
+}
+
+model Rating {
+  id           String   @id @default(cuid())
+  tripId       String   @unique
+  fromUserId   String
+  toUserId     String
+  score        Int
+  reviewText   String?
+  createdAt    DateTime @default(now())
+  trip         Trip     @relation(fields: [tripId], references: [id])
+  fromUser     User     @relation("RatingsGiven", fields: [fromUserId], references: [id])
+  toUser       User     @relation("RatingsRecv", fields: [toUserId], references: [id])
+}
+
+model RewardLevel {
+  id                String @id @default(cuid())
+  level             Int    @unique
+  minCompletedRides Int
+  minRating         Float
+  radiusKm          Float
+}
+
+model TombolaEntry {
+  id           String   @id @default(cuid())
+  userId       String
+  kind         String
+  eligibleAt   DateTime
+  drawCycle    String
+  createdAt    DateTime @default(now())
+  uniqueKey    String   @unique
+}
+
+model Voucher {
+  id          String          @id @default(cuid())
+  userId      String
+  amountMad   Decimal
+  category    VoucherCategory
+  expiresAt   DateTime
+  redeemedAt  DateTime?
+  user        User            @relation(fields: [userId], references: [id])
+}
+
+model Credit {
+  id          String   @id @default(cuid())
+  userId      String
+  ridesCount  Int
+  expiresAt   DateTime
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Promo {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  discountType   String
+  value          Decimal
+  maxUsage       Int
+  usedCount      Int      @default(0)
+  minFare        Decimal?
+  serviceType    ServiceType?
+  expiresAt      DateTime
+}
+
+model Referral {
+  id              String   @id @default(cuid())
+  inviterUserId   String
+  inviteeUserId   String
+  kind            String
+  fulfilled       Boolean  @default(false)
+  fulfilledAt     DateTime?
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  subject     String
+  description String
+  status      String
+  createdAt   DateTime @default(now())
+}
+
+model IncidentReport {
+  id          String   @id @default(cuid())
+  tripId      String?
+  riderId     String?
+  notes       String
+  photoUrl    String?
+  status      String
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+}
